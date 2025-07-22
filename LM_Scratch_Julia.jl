@@ -108,7 +108,7 @@ function levenberg_marquardt_nonsquare_ten_years(x0, w, cost, zzz; l0=10.0, max_
     x = copy(x0)
     for i in 1:max_iter
         J = ForwardDiff.jacobian(zzz, x)
-        J = J' * J + l0 * Diagonal(J' * J)
+        #J = J' * J + l0 * Diagonal(J' * J)
         hlm_val = h(J, w, cost, x, l0)
         rho_val = rho_nonsquare_ten_years(J, x, hlm_val, w, cost)
         println("iteracion = $i, ρ = $rho_val,  λ = $l0 , cost = ",sum(cost(x)))
@@ -550,7 +550,9 @@ J_NS =  ForwardDiff.jacobian(navier_stokess_system, weightss)
 sJNS = J_NS'*wns* J_NS
 
 size(J_NS)
+
 J = J_NS' * J_NS + l0 * Diagonal(J_NS' * J_NS)
+
 size(J)
 
 
@@ -572,7 +574,8 @@ J_s_square = ForwardDiff.jacobian(navier_stokes_system_square!, weightss)
 end
 
 
-navier_stokes_residual!(result)
+sum(navier_stokes_residual_square!(result))
+
 Re = 100
 
 @time begin
