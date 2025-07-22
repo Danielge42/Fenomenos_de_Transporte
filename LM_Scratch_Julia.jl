@@ -108,10 +108,11 @@ function levenberg_marquardt_nonsquare_ten_years(x0, w, cost, zzz; l0=10.0, max_
     x = copy(x0)
     for i in 1:max_iter
         J = ForwardDiff.jacobian(zzz, x)
+        J = J' * J + l0 * Diagonal(J' * J)
         hlm_val = h(J, w, cost, x, l0)
         rho_val = rho_nonsquare_ten_years(J, x, hlm_val, w, cost)
         println("iteracion = $i, ρ = $rho_val,  λ = $l0 , cost = ",sum(cost(x)))
-        if rho_val > 0.00000001
+        if rho_val > 0.001
             x += hlm_val
             l0 = max(l0 *0.5, 1e-7)
         else
@@ -438,6 +439,34 @@ function navier_stokes_residual!( weights_vec )
     return F
 end
 
+function navier_stokes_residual_square!( weights_vec )
+    F = similar(weights_vec, 2*N + 4*M_4y + 4*M_4x)
+    wx = weights_vec[1:N+M]
+    wy = weights_vec[N+M+1:2*(N+M)]
+    wxiwxj = reshape((wx * transpose(wx)),:,1)
+    wxiwyj = reshape((wx * transpose(wy)),:,1)
+    wyiwxj = reshape((wy * transpose(wx)),:,1)
+    wyiwyj = reshape((wy * transpose(wy)),:,1)
+    F[1:N] = (1 / Re) * (-1 / beta^2 * (gxx_int*wx) - gyy_int * wx) - (phidphidy * wxiwyj) / beta + (phidphidy * wyiwxj) .+ (-pm) / beta
+    F[N+1:2*N] = (1 / Re) * (-1 / beta^2 * (gxx_int * wy) - gyy_int * wy) + (phidphidx * wxiwyj) / beta + (phidphidy * wyiwyj)
+    #F[2*N+1:3*N] = (gx_int * wx) / beta + (gy_int * wy)
+    #Condiciones de frontera entrada y salida
+    #F[2*N+1:3*N+M_4y] = (gx_b4 * wx) / beta + (gy_b4 * wy)
+    #F[2*N+M_4y+1:3*N+2*M_4y] = (gx_b3 * wx) / beta + (gy_b3 * wy)
+    F[2*N+1:2*N+1*M_4y] = (-1 / Re) * (1 / beta^2 * (gxx_b4 * wx) + gyy_b4 * wx) - (phidphidy_b4 * wxiwyj) / beta + (phidphidy_b4 * wyiwxj) .+ (-pm) / beta
+    F[2*N+1*M_4y+1:2*N+2*M_4y] = (1 / Re) * (-1 / beta^2 * (gxx_b3 * wx) - gyy_b3 * wx) - (phidphidy_b3 * wxiwyj) / beta + (phidphidy_b3 * wyiwxj) .+ (-pm) / beta
+    F[2*N+2*M_4y+1:2*N+3*M_4y] = (1 / Re) * (-1 / beta^2 * (gxx_b4 * wy) - gyy_b4 * wy) + (phidphidx_b4 * wxiwyj) / beta + (phidphidy_b4 * wyiwyj)
+    F[2*N+3*M_4y+1:2*N+4*M_4y] = (1 / Re) * (-1 / beta^2 * (gxx_b3 * wy) - gyy_b3 * wy) + (phidphidx_b3 * wxiwyj) / beta + (phidphidy_b3 * wyiwyj)
+    #Condiciones de frontera Dirichlet
+    F[2*N+4*M_4y+1: 2*N+4*M_4y+ 1*M_4x] = gb2 * wx
+    F[2*N+4*M_4y+M_4x+1:2*N+4*M_4y+2*M_4x] = gb1 * wx
+    F[2*N+4*M_4y+2*M_4x+1:2*N+4*M_4y+3*M_4x] = gb2 * wy
+    F[2*N+4*M_4y+3*M_4x+1:2*N+4*M_4y+4*M_4x] = gb1 * wy
+    # Return the residual vector
+
+    return F
+end
+
 
 navier_stokes_residual!(weightss)
 eps()
@@ -474,16 +503,56 @@ function navier_stokess_system(weights_vec)
 
 end
 
-size(navier_stokess_system(weightss))
+function navier_stokes_system_square!( weights_vec )
+    F = similar(weights_vec, 2*N + 4*M_4y + 4*M_4x)
+    wx = weights_vec[1:N+M]
+    wy = weights_vec[N+M+1:2*(N+M)]
+    wxiwxj = reshape((wx * transpose(wx)),:,1)
+    wxiwyj = reshape((wx * transpose(wy)),:,1)
+    wyiwxj = reshape((wy * transpose(wx)),:,1)
+    wyiwyj = reshape((wy * transpose(wy)),:,1)
+    F[1:N] = (1 / Re) * (-1 / beta^2 * (gxx_int*wx) - gyy_int * wx) - (phidphidy * wxiwyj) / beta + (phidphidy * wyiwxj) #.+ (-pm) / beta
+    F[N+1:2*N] = (1 / Re) * (-1 / beta^2 * (gxx_int * wy) - gyy_int * wy) + (phidphidx * wxiwyj) / beta + (phidphidy * wyiwyj)
+    #F[2*N+1:3*N] = (gx_int * wx) / beta + (gy_int * wy)
+    #Condiciones de frontera entrada y salida
+    #F[2*N+1:3*N+M_4y] = (gx_b4 * wx) / beta + (gy_b4 * wy)
+    #F[2*N+M_4y+1:3*N+2*M_4y] = (gx_b3 * wx) / beta + (gy_b3 * wy)
+    F[2*N+1:2*N+1*M_4y] = (-1 / Re) * (1 / beta^2 * (gxx_b4 * wx) + gyy_b4 * wx) - (phidphidy_b4 * wxiwyj) / beta + (phidphidy_b4 * wyiwxj) #.+ (-pm) / beta
+    F[2*N+1*M_4y+1:2*N+2*M_4y] = (1 / Re) * (-1 / beta^2 * (gxx_b3 * wx) - gyy_b3 * wx) - (phidphidy_b3 * wxiwyj) / beta + (phidphidy_b3 * wyiwxj) #.+ (-pm) / beta
+    F[2*N+2*M_4y+1:2*N+3*M_4y] = (1 / Re) * (-1 / beta^2 * (gxx_b4 * wy) - gyy_b4 * wy) + (phidphidx_b4 * wxiwyj) / beta + (phidphidy_b4 * wyiwyj)
+    F[2*N+3*M_4y+1:2*N+4*M_4y] = (1 / Re) * (-1 / beta^2 * (gxx_b3 * wy) - gyy_b3 * wy) + (phidphidx_b3 * wxiwyj) / beta + (phidphidy_b3 * wyiwyj)
+    #Condiciones de frontera Dirichlet
+    F[2*N+4*M_4y+1: 2*N+4*M_4y+ 1*M_4x] = gb2 * wx
+    F[2*N+4*M_4y+M_4x+1:2*N+4*M_4y+2*M_4x] = gb1 * wx
+    F[2*N+4*M_4y+2*M_4x+1:2*N+4*M_4y+3*M_4x] = gb2 * wy
+    F[2*N+4*M_4y+3*M_4x+1:2*N+4*M_4y+4*M_4x] = gb1 * wy
+    # Return the residual vector
+
+    return -F
+end
+
+
+size(navier_stokes_system_square!(weightss))
 size(navier_stokes_residual!(weightss),1)
+
+size(navier_stokes_residual_square!(weightss))
+
 navier_stokes_residual!(weightss)
 #sum(navier_stokes_residual!(weightss))
 
 wns = Diagonal(ones(size(navier_stokes_residual!(weightss),1)) )
+wns_square = Diagonal(ones(size(navier_stokes_residual_square!(weightss),1)) )
 #win = Diagonal(ones(size(weightss,1)) )
 J_NS =  ForwardDiff.jacobian(navier_stokess_system, weightss)
 
+
+
 sJNS = J_NS'*wns* J_NS
+
+size(J_NS)
+J = J_NS' * J_NS + l0 * Diagonal(J_NS' * J_NS)
+size(J)
+
 
 minimum(sJNS), maximum(sJNS)
 maximum(J_NS), minimum(J_NS)
@@ -494,9 +563,14 @@ weightss
 hns = h(J_NS, wns, navier_stokes_residual!, weightss, l0)
 rho_nonsquare_ten_years(J_NS, weightss,hns , wns, navier_stokes_residual!)
 
+J_square = ForwardDiff.jacobian(navier_stokes_residual_square!, weightss)
+J_s_square = ForwardDiff.jacobian(navier_stokes_system_square!, weightss)
+
+
 @time begin
-    result = levenberg_marquardt_nonsquare_ten_years(weightss, wns, navier_stokes_residual!, navier_stokess_system)
+    result = levenberg_marquardt_nonsquare_ten_years(weightss, wns_square, navier_stokes_residual_square!, navier_stokes_system_square!)
 end
+
 
 navier_stokes_residual!(result)
 Re = 100
